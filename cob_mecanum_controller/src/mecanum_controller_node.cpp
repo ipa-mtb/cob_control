@@ -19,27 +19,28 @@
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/JointState.h>
 #include <ros/ros.h>
+#include <cob_srvs/SetFloat.h>
 
 #include <exception>
+
 class MecanumControllerNode
 {
 public:
   MecanumControllerNode() : nh_()
   {
-    double lx, ly, r;
     bool all_parameters_set = true;
     ros::NodeHandle pnh("~");
-    if (!pnh.getParam("lx", lx))
+    if (!pnh.getParam("lx", lx_))
     {
       ROS_ERROR_STREAM("Parameter lx was not declared in the scope");
       all_parameters_set = false;
     }
-    if (!pnh.getParam("ly", ly))
+    if (!pnh.getParam("ly", ly_))
     {
       ROS_ERROR_STREAM("Parameter ly was not declared in the scope");
       all_parameters_set = false;
     }
-    if (!pnh.getParam("r", r))
+    if (!pnh.getParam("r", r_))
     {
       ROS_ERROR_STREAM("Parameter r was not declared in the scope");
       all_parameters_set = false;
@@ -55,7 +56,7 @@ public:
     odom_frame_ = "map";
     pnh.getParam("odom_frame", odom_frame_);
 
-    controller_ = std::make_shared<cob_mecanum_controller::MecanumController>(lx, ly, r);
+    controller_ = std::make_shared<cob_mecanum_controller::MecanumController>(lx_, ly_, r_);
 
     odom_pub_ = nh_.advertise<nav_msgs::Odometry>("odom", 10, false);
     joint_cmd_pub_ = nh_.advertise<sensor_msgs::JointState>("wheel_command", 10, false);
@@ -64,6 +65,22 @@ public:
 
     joint_state_sub_ =
         nh_.subscribe<sensor_msgs::JointState>("wheel_state", 1, &MecanumControllerNode::jointStateCallback, this);
+
+    auto makeCallback = [this](auto&& setter) {
+      boost::function<bool(cob_srvs::SetFloatRequest&, cob_srvs::SetFloatResponse&)> cb =
+          [this, setter = std::move(setter)](cob_srvs::SetFloatRequest& req, cob_srvs::SetFloatResponse& res) {
+            setter(req.data);
+            controller_ = std::make_shared<cob_mecanum_controller::MecanumController>(lx_, ly_, r_);
+            res.message = "success";
+            res.success = true;
+            return true;
+          };
+      return cb;
+    };
+
+    set_lx_service_ = nh_.advertiseService("set_lx", makeCallback([this](double value) { lx_ = value; }));
+    set_ly_service_ = nh_.advertiseService("set_ly", makeCallback([this](double value) { ly_ = value; }));
+    set_r_service_ = nh_.advertiseService("set_r", makeCallback([this](double value) { r_ = value; }));
   }
 
 protected:
@@ -77,6 +94,13 @@ protected:
 
   std::string static_frame_;
   std::string odom_frame_;
+
+  ros::ServiceServer set_lx_service_;
+  ros::ServiceServer set_ly_service_;
+  ros::ServiceServer set_r_service_;
+  double ly_{ 0 };
+  double lx_{ 0 };
+  double r_{ 0 };
 
   void twistCallback(const geometry_msgs::Twist msg)
   {
