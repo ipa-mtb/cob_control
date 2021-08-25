@@ -56,6 +56,11 @@ public:
     odom_frame_ = "map";
     pnh.getParam("odom_frame", odom_frame_);
 
+    pnh.getParam("front_left_joint_name", joint_names.at(0));
+    pnh.getParam("front_right_joint_name", joint_names.at(1));
+    pnh.getParam("rear_left_joint_name", joint_names.at(2));
+    pnh.getParam("rear_right_joint_name", joint_names.at(3));
+
     controller_ = std::make_shared<cob_mecanum_controller::MecanumController>(lx_, ly_, r_);
 
     odom_pub_ = nh_.advertise<nav_msgs::Odometry>("odom", 10, false);
@@ -66,15 +71,17 @@ public:
     joint_state_sub_ =
         nh_.subscribe<sensor_msgs::JointState>("wheel_state", 1, &MecanumControllerNode::jointStateCallback, this);
 
-    auto makeCallback = [this](auto&& setter) {
+    auto makeCallback = [this](auto&& setter)
+    {
       boost::function<bool(cob_srvs::SetFloatRequest&, cob_srvs::SetFloatResponse&)> cb =
-          [this, setter = std::move(setter)](cob_srvs::SetFloatRequest& req, cob_srvs::SetFloatResponse& res) {
-            setter(req.data);
-            controller_ = std::make_shared<cob_mecanum_controller::MecanumController>(lx_, ly_, r_);
-            res.message = "success";
-            res.success = true;
-            return true;
-          };
+          [this, setter = std::move(setter)](cob_srvs::SetFloatRequest& req, cob_srvs::SetFloatResponse& res)
+      {
+        setter(req.data);
+        controller_ = std::make_shared<cob_mecanum_controller::MecanumController>(lx_, ly_, r_);
+        res.message = "success";
+        res.success = true;
+        return true;
+      };
       return cb;
     };
 
@@ -101,6 +108,7 @@ protected:
   double ly_{ 0 };
   double lx_{ 0 };
   double r_{ 0 };
+  std::array<std::string, 4> joint_names;
 
   void twistCallback(const geometry_msgs::Twist msg)
   {
@@ -108,6 +116,8 @@ protected:
     twist << msg.linear.x, msg.linear.y, msg.angular.z;
     Eigen::Vector4d wheel_velocities = controller_->twistToWheel(twist);
     sensor_msgs::JointState joint_command;
+    joint_command.name.resize(4);
+    std::copy(joint_names.begin(), joint_names.end(), joint_command.name.begin());
     joint_command.velocity = std::vector<double>(
         wheel_velocities.data(), wheel_velocities.data() + wheel_velocities.rows() * wheel_velocities.cols());
     joint_cmd_pub_.publish(joint_command);
