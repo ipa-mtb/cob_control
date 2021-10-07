@@ -6,10 +6,12 @@ add_compile_options(-std=c++14)
 find_package(catkin REQUIRED
   COMPONENTS
   cmake_modules
+  cob_srvs
   geometry_msgs
   nav_msgs
   roscpp
   sensor_msgs
+  tf2_ros
 )
 
 find_package(Eigen3 REQUIRED)
@@ -19,11 +21,13 @@ add_definitions(${EIGEN3_DEFINITIONS})
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS   
+  CATKIN_DEPENDS
+   cob_srvs
    geometry_msgs
    nav_msgs
    roscpp
    sensor_msgs
+   tf2_ros
 )
 
 include_directories(
