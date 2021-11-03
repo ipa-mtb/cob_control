@@ -168,10 +168,26 @@ protected:
   }
 
   void jointStateCallback(const sensor_msgs::JointState msg) {
-    Eigen::Vector4d wheel_velocities(msg.velocity.data());
+    Eigen::Vector4d wheel_velocities;
+    auto get_by_name = [&msg](auto const& name){
+      if (auto candidate = std::find(msg.name.begin(),msg.name.end(),name); candidate != msg.name.end()){
+        return msg.velocity.at(std::distance(msg.name.begin(),candidate));
+      }
+      throw std::out_of_range("Could not find joint with name " +name);
+    };
+    try{
+      for (size_t i = 0 ; i < joint_names_.size();++i){
+        wheel_velocities(i) = get_by_name(joint_names_.at(i));
+      }
+    }
+    catch(std::out_of_range const& e){
+      ROS_ERROR_STREAM("Could not process joint state feedback. Original error " << e.what());
+      return;
+    }
     Eigen::Vector3d twist = controller_->wheelToTwist(wheel_velocities);
     nav_msgs::Odometry odom_msg;
     odom_msg.header.frame_id = static_frame_;
+    odom_msg.header.stamp = ros::Time::now();
     odom_msg.child_frame_id = odom_frame_;
 
     odom_msg.twist.twist.linear.x = twist.x();
